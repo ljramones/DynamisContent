@@ -7,7 +7,10 @@ import org.dynamiscontent.api.loader.AssetLoader;
 import org.dynamiscontent.api.manifest.AssetManifest;
 import org.dynamiscontent.core.DefaultAssetManager;
 import org.dynamiscontent.core.cache.DefaultAssetCache;
+import org.dynamiscontent.core.loader.DmeshBlobLoader;
+import org.dynamiscontent.core.manifest.JsonAssetManifestReader;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -54,11 +57,32 @@ public final class ContentRuntime {
     public static final class Builder {
         private AssetManifest manifest;
         private AssetCache cache;
+        private Path baseDir;
         private final List<AssetLoader<?>> loaders = new ArrayList<>();
 
         public Builder manifest(AssetManifest manifest) {
             this.manifest = Objects.requireNonNull(manifest, "manifest");
             return this;
+        }
+
+        public Builder manifest(Path jsonFile) {
+            this.manifest = new JsonAssetManifestReader().read(Objects.requireNonNull(jsonFile, "jsonFile"));
+            return this;
+        }
+
+        public Builder baseDir(Path baseDir) {
+            this.baseDir = Objects.requireNonNull(baseDir, "baseDir");
+            return this;
+        }
+
+        public Builder registerDefaultLoaders(Path baseDir) {
+            this.loaders.add(new DmeshBlobLoader(Objects.requireNonNull(baseDir, "baseDir")));
+            return this;
+        }
+
+        public Builder registerDefaultLoaders() {
+            Path resolvedBaseDir = baseDir != null ? baseDir : Path.of(".");
+            return registerDefaultLoaders(resolvedBaseDir);
         }
 
         public Builder cache(AssetCache cache) {
