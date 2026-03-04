@@ -32,6 +32,8 @@ class FundamentalTypeContractTest {
         try (Stream<Path> pathStream = Files.walk(repositoryRoot)) {
             pathStream
                     .filter(Files::isRegularFile)
+                    .filter(path -> !path.toString().contains("/target/"))
+                    .filter(path -> !path.toString().contains("/.git/"))
                     .filter(path -> BANNED_FILE_NAMES.contains(path.getFileName().toString()))
                     .findFirst()
                     .ifPresent(found -> fail("Banned duplicated fundamental type found: " + found));
