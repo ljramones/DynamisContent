@@ -7,6 +7,7 @@ import org.dynamisengine.content.api.id.AssetType;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class DefaultAssetCache implements AssetCache {
 
@@ -14,6 +15,8 @@ public final class DefaultAssetCache implements AssetCache {
     }
 
     private final ConcurrentHashMap<CacheKey, Object> map = new ConcurrentHashMap<>();
+    private final AtomicLong hitCount = new AtomicLong();
+    private final AtomicLong missCount = new AtomicLong();
 
     @Override
     public <T> Optional<T> get(AssetId id, AssetType<T> type) {
@@ -21,8 +24,10 @@ public final class DefaultAssetCache implements AssetCache {
         Objects.requireNonNull(type, "type");
         Object v = map.get(new CacheKey(id, type.id()));
         if (v == null) {
+            missCount.incrementAndGet();
             return Optional.empty();
         }
+        hitCount.incrementAndGet();
         return Optional.of(type.type().cast(v));
     }
 
@@ -44,4 +49,13 @@ public final class DefaultAssetCache implements AssetCache {
     public void clear() {
         map.clear();
     }
+
+    /** Number of cached assets. */
+    public int size() { return map.size(); }
+
+    /** Cumulative cache hits since creation. */
+    public long cacheHits() { return hitCount.get(); }
+
+    /** Cumulative cache misses since creation. */
+    public long cacheMisses() { return missCount.get(); }
 }

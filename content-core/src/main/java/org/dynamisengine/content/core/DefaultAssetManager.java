@@ -14,12 +14,19 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class DefaultAssetManager implements AssetManager, AssetResolver {
 
     private final AssetManifest manifest;
     private final AssetCache cache;
     private final Map<String, AssetLoader<?>> loaders = new ConcurrentHashMap<>();
+
+    // Telemetry counters (debug-agnostic, public state only)
+    private final AtomicLong totalLoads = new AtomicLong();
+    private final AtomicLong failedLoads = new AtomicLong();
+    private volatile long lastLoadNanos;
+    private volatile String lastLoadedAssetId = "";
 
     public DefaultAssetManager(AssetManifest manifest, AssetCache cache) {
         this.manifest = Objects.requireNonNull(manifest, "manifest");
@@ -63,10 +70,21 @@ public final class DefaultAssetManager implements AssetManager, AssetResolver {
         @SuppressWarnings("unchecked")
         AssetLoader<T> loader = (AssetLoader<T>) rawLoader;
 
-        T asset = loader.load(id, entry, this);
+        long loadStart = System.nanoTime();
+        T asset;
+        try {
+            asset = loader.load(id, entry, this);
+        } catch (RuntimeException e) {
+            failedLoads.incrementAndGet();
+            throw e;
+        }
         if (asset == null) {
+            failedLoads.incrementAndGet();
             throw new DynamisException("Loader returned null for asset: " + id);
         }
+        lastLoadNanos = System.nanoTime() - loadStart;
+        lastLoadedAssetId = id.value();
+        totalLoads.incrementAndGet();
 
         cache.put(id, type, asset);
         return Optional.of(asset);
@@ -86,4 +104,22 @@ public final class DefaultAssetManager implements AssetManager, AssetResolver {
     public <T> T resolve(AssetId id, AssetType<T> type) {
         return get(id, type);
     }
+
+    /** Cumulative successful load count. */
+    public long totalLoads() { return totalLoads.get(); }
+
+    /** Cumulative failed load count. */
+    public long failedLoads() { return failedLoads.get(); }
+
+    /** Duration of the most recent load in nanoseconds. */
+    public long lastLoadNanos() { return lastLoadNanos; }
+
+    /** Asset ID of the most recently loaded asset. */
+    public String lastLoadedAssetId() { return lastLoadedAssetId; }
+
+    /** Number of manifest entries. */
+    public int manifestEntryCount() { return manifest.entries().size(); }
+
+    /** Number of registered loaders. */
+    public int registeredLoaderCount() { return loaders.size(); }
 }
